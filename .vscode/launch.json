@@ -1,0 +1,50 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Jarvis",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "jarvis",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Jarvis: chat in the terminal",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "jarvis",
+      "args": [
+        "terminal"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Jarvis: setup (add your key)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "jarvis",
+      "args": [
+        "setup"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Jarvis: check",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "jarvis",
+      "args": [
+        "check"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

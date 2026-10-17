@@ -1,0 +1,81 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+    "python.terminal.activateEnvironment": true,
+    "python.envFile": "${workspaceFolder}/.env",
+    "python.testing.unittestEnabled": true,
+    "python.testing.pytestEnabled": false,
+    "python.testing.unittestArgs": [
+      "-v",
+      "-s",
+      "./tests",
+      "-p",
+      "test_*.py"
+    ],
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/*.pyc": true
+    }
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Run Jarvis",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "jarvis",
+        "cwd": "${workspaceFolder}",
+        "console": "integratedTerminal",
+        "justMyCode": true
+      },
+      {
+        "name": "Jarvis: chat in the terminal",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "jarvis",
+        "args": [
+          "terminal"
+        ],
+        "cwd": "${workspaceFolder}",
+        "console": "integratedTerminal",
+        "justMyCode": true
+      },
+      {
+        "name": "Jarvis: setup (add your key)",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "jarvis",
+        "args": [
+          "setup"
+        ],
+        "cwd": "${workspaceFolder}",
+        "console": "integratedTerminal",
+        "justMyCode": true
+      },
+      {
+        "name": "Jarvis: check",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "jarvis",
+        "args": [
+          "check"
+        ],
+        "cwd": "${workspaceFolder}",
+        "console": "integratedTerminal",
+        "justMyCode": true
+      }
+    ]
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "ms-python.debugpy"
+    ]
+  }
+}

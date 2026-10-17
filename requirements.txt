@@ -1,0 +1,3 @@
+# anthropic: the Claude brain. edge-tts: Jarvis's natural voice (needs internet).
+anthropic>=0.40
+edge-tts>=6.1

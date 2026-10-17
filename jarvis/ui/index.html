@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f11;
+    --surface: #16171a;
+    --surface-2: #1d1e22;
+    --line: #2a2b30;
+    --text: #ecebe8;
+    --muted: #8c8b88;
+    --faint: #5d5c5a;
+    --accent: #d4b98c;
+    --accent-ink: #1a160f;
+    --ok: #7fb89a;
+    --warn: #d9a25f;
+    --bad: #d77a72;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font: inherit; color: inherit; }
+
+  .app { height: 100%; display: flex; flex-direction: column; }
+
+  /* Top bar */
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 14px 24px; border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .mark {
+    width: 28px; height: 28px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle at 35% 30%, #f3e6cc, var(--accent) 55%, #8a7451);
+    box-shadow: 0 0 0 4px rgba(212, 185, 140, .08);
+  }
+  .busy .mark { animation: pulse 1.1s ease-in-out infinite; }
+  .speaking .mark { animation: pulse .5s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(.82); } }
+  .name { font-weight: 600; letter-spacing: .14em; font-size: 14px; }
+  .status { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 7px; white-space: nowrap; overflow: hidden; }
+  .status span:last-child { overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: none; }
+  .dot.on { background: var(--ok); }
+  .tools { display: flex; align-items: center; gap: 8px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+    color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: none; transition: .15s;
+    white-space: nowrap;
+  }
+  .pill:hover { color: var(--text); border-color: #3a3b41; }
+  .pill.on { color: var(--text); }
+  .pill.on .led { background: var(--accent); box-shadow: 0 0 6px rgba(212, 185, 140, .6); }
+  .led { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+  .pill svg { width: 15px; height: 15px; }
+  select.pill { appearance: none; max-width: 190px; padding-right: 14px; }
+  select.pill option { background: var(--surface); color: var(--text); }
+
+  /* Conversation */
+  .log { flex: 1; overflow-y: auto; }
+  .log::-webkit-scrollbar { width: 8px; } .log::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+  .thread { max-width: 760px; margin: 0 auto; padding: 32px 24px 16px; display: flex; flex-direction: column; gap: 22px; }
+  .msg { white-space: pre-wrap; word-wrap: break-word; animation: rise .2s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+  .msg.jarvis { display: grid; grid-template-columns: 22px 1fr; gap: 14px; }
+  .msg.jarvis::before {
+    content: ""; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f3e6cc, var(--accent) 55%, #8a7451);
+  }
+  .msg.you {
+    align-self: flex-end; max-width: 80%; background: var(--surface-2); border: 1px solid var(--line);
+    padding: 10px 16px; border-radius: 18px 18px 4px 18px;
+  }
+  .msg.ask .body { border-left: 2px solid var(--accent); padding-left: 12px; }
+  .msg.error .body { color: var(--bad); }
+  .typing { display: inline-flex; gap: 5px; padding-top: 8px; }
+  .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1s infinite; }
+  .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes blink { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
+
+  .welcome { text-align: center; padding: 10vh 0 2vh; }
+  .welcome h1 { font-weight: 500; font-size: 30px; letter-spacing: -.015em; margin: 0 0 6px; }
+  .welcome p { color: var(--muted); margin: 0 auto; max-width: 440px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 26px; }
+  .chip {
+    background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px;
+    color: var(--muted); font-size: 13px; cursor: pointer; transition: .15s;
+  }
+  .chip:hover { color: var(--text); border-color: #3a3b41; background: var(--surface); }
+
+  /* Composer */
+  .composer { padding: 12px 24px 20px; }
+  form {
+    max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 6px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 6px;
+    transition: border-color .15s;
+  }
+  form:focus-within { border-color: #44454b; }
+  #input { flex: 1; min-width: 0; background: none; border: 0; outline: none; padding: 10px 8px; font-size: 15px; }
+  #input::placeholder { color: var(--faint); }
+  .btn {
+    width: 40px; height: 40px; border-radius: 11px; border: 0; background: transparent; color: var(--muted);
+    display: grid; place-items: center; cursor: pointer; flex: none; transition: .15s;
+  }
+  .btn:hover { color: var(--text); background: var(--surface-2); }
+  .btn.send { background: var(--accent); color: var(--accent-ink); }
+  .btn.send:hover { background: #e0c89e; color: var(--accent-ink); }
+  .btn.live { background: var(--bad); color: #fff; animation: pulse 1.2s ease-in-out infinite; }
+  .btn.off { opacity: .4; }
+  .btn svg { width: 19px; height: 19px; }
+  .hint { max-width: 760px; margin: 8px auto 0; text-align: center; color: var(--faint); font-size: 12px; }
+
+  @media (max-width: 680px) {
+    header { padding: 12px 16px; }
+    .status, .hide-sm { display: none; }
+    .thread { padding: 20px 16px 12px; }
+    .composer { padding: 10px 16px 16px; }
+    select.pill { max-width: 120px; }
+    .msg.you { max-width: 90%; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <div class="brand">
+      <div class="mark" aria-hidden="true"></div>
+      <span class="name">JARVIS</span>
+      <span class="status"><span class="dot" id="dot"></span><span id="state">Connecting…</span></span>
+    </div>
+    <div class="tools">
+      <select id="voicePick" class="pill" title="Jarvis's voice" hidden></select>
+      <button class="pill" id="voiceToggle"><span class="led"></span><span>Read aloud</span></button>
+      <a class="pill" href="/voice" title="Talk hands-free, voice only">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>
+        <span class="hide-sm">Voice mode</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="log" id="log" aria-live="polite">
+    <div class="thread" id="thread">
+      <div class="welcome" id="welcome">
+        <h1 id="greeting">Hello.</h1>
+        <p id="sub">How can I help?</p>
+        <div class="chips">
+          <button class="chip" data-say="What time is it?">What time is it?</button>
+          <button class="chip" data-say="calculate 240 * 0.15">Calculate 15% of 240</button>
+          <button class="chip" data-say="list my notes">Show my notes</button>
+          <button class="chip" data-say="ask me something">Ask me something</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <form id="form" autocomplete="off">
+      <button type="button" class="btn" id="mic" title="Talk (Chrome or Edge)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <input id="input" placeholder="Message Jarvis" maxlength="4000">
+      <button class="btn send" title="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+      </button>
+    </form>
+    <div class="hint">Jarvis runs on this computer only</div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const thread = $("thread"), log = $("log"), input = $("input"), app = $("app"), state = $("state");
+let busy = false, waitingAnswer = false, brainLabel = "Ready";
+let voiceOn = false;
+try { voiceOn = localStorage.getItem("jarvis-voice") === "on"; } catch (e) {}
+
+function setState(text, cls) {
+  state.textContent = text;
+  app.classList.remove("busy", "speaking");
+  if (cls) app.classList.add(cls);
+}
+
+function add(kind, text, extra) {
+  const w = $("welcome"); if (w) w.remove();
+  const div = document.createElement("div");
+  div.className = "msg " + kind + (extra ? " " + extra : "");
+  const body = document.createElement("div");
+  body.className = "body";
+  if (text === null) body.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+  else body.textContent = text;
+  div.appendChild(body);
+  thread.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div;
+}
+
+// Voices. Jarvis's own natural voices come from the server (voice.py), so they
+// sound the same in every browser. The browser's built-in voices are the backup.
+let voices = [];            // browser voices, most human-sounding first
+let serverVoices = [];      // Jarvis's own voices, from /api/status
+let chosenVoice = "";       // "srv:<id>" or "web:<name>"
+let audio = null, warnedVoice = false;
+try { chosenVoice = localStorage.getItem("jarvis-voice-choice") || ""; } catch (e) {}
+
+function voiceScore(v) {
+  const n = v.name;
+  let score = 0;
+  if (/natural/i.test(n)) score += 100;
+  if (/online/i.test(n)) score += 20;
+  if (/^google/i.test(n)) score += 60;
+  if (/en-GB/i.test(v.lang)) score += 8;
+  if (/ryan|thomas|george|brian|daniel|guy|christopher|eric|andrew/i.test(n)) score += 4;
+  return score;
+}
+function loadVoices() {
+  if ("speechSynthesis" in window) {
+    voices = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang))
+      .sort((a, b) => voiceScore(b) - voiceScore(a));
+  }
+  const pick = $("voicePick");
+  pick.innerHTML = "";
+  const group = (label, items) => {
+    if (!items.length) return;
+    const g = document.createElement("optgroup");
+    g.label = label;
+    items.forEach(([value, text]) => {
+      const o = document.createElement("option");
+      o.value = value; o.textContent = text; g.appendChild(o);
+    });
+    pick.appendChild(g);
+  };
+  group("Jarvis voices (natural)", serverVoices.map(v => ["srv:" + v.id, v.label]));
+  group("Browser voices", voices.map(v => ["web:" + v.name,
+    v.name.replace(/^Microsoft /, "").replace(/ - .*$/, "").replace(/ Online \(Natural\)/, " (natural)")]));
+  const values = Array.from(pick.options).map(o => o.value);
+  if (!values.includes(chosenVoice)) chosenVoice = values[0] || "";
+  pick.value = chosenVoice;
+  pick.hidden = values.length === 0;
+}
+if ("speechSynthesis" in window) speechSynthesis.onvoiceschanged = loadVoices;
+
+function stopSpeaking() {
+  if (audio) { audio.pause(); audio = null; }
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+}
+function idleText() { return waitingAnswer ? "Waiting for your answer" : brainLabel; }
+function doneSpeaking() { setState(idleText()); }
+
+function speakWithBrowser(text, name) {
+  if (!("speechSynthesis" in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  const v = voices.find(x => x.name === name) || voices[0];
+  if (v) { u.voice = v; u.lang = v.lang; }
+  const natural = v && voiceScore(v) >= 60;
+  u.rate = natural ? 1.0 : 0.95;
+  u.pitch = natural ? 1.0 : 0.95;
+  u.onstart = () => setState("Speaking", "speaking");
+  u.onend = doneSpeaking;
+  speechSynthesis.speak(u);
+}
+
+async function speak(text, force) {
+  if ((!voiceOn && !force) || !text) return;
+  stopSpeaking();
+  if (chosenVoice.startsWith("srv:")) {
+    try {
+      const res = await fetch("/api/speak", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voice: chosenVoice.slice(4) })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || res.status);
+      const url = URL.createObjectURL(await res.blob());
+      audio = new Audio(url);
+      audio.onplay = () => setState("Speaking", "speaking");
+      audio.onended = () => { URL.revokeObjectURL(url); doneSpeaking(); };
+      await audio.play();
+      return;
+    } catch (e) {
+      if (!warnedVoice) {
+        warnedVoice = true;
+        add("jarvis", "My natural voice isn't working right now, so I'm using the browser's voice for now. It needs internet; if you're online, close Jarvis and start it again with Start Jarvis.bat.", "error");
+      }
+    }
+  }
+  speakWithBrowser(text, chosenVoice.startsWith("web:") ? chosenVoice.slice(4) : "");
+}
+
+async function send(text) {
+  text = text.trim();
+  if (!text || busy) return;
+  busy = true;
+  add("you", text);
+  input.value = "";
+  const pending = add("jarvis", null);
+  setState("Thinking", "busy");
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+    pending.remove();
+    waitingAnswer = data.type === "ask";
+    add("jarvis", data.text || data.error || "…", data.type === "ask" ? "ask" : data.type === "error" ? "error" : "");
+    setState(idleText());
+    speak(data.text || "");
+  } catch (e) {
+    pending.remove();
+    add("jarvis", "I can't reach my core. Is the Jarvis window still open?", "error");
+    setState("Offline");
+  } finally {
+    busy = false;
+    input.focus();
+  }
+}
+
+$("form").addEventListener("submit", e => { e.preventDefault(); send(input.value); });
+document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => send(c.dataset.say)));
+
+const vt = $("voiceToggle");
+function paintVoice() { vt.classList.toggle("on", voiceOn); vt.title = voiceOn ? "Replies are read out loud. Click to turn off." : "Click to hear replies out loud"; }
+vt.addEventListener("click", () => {
+  voiceOn = !voiceOn; paintVoice();
+  try { localStorage.setItem("jarvis-voice", voiceOn ? "on" : "off"); } catch (e) {}
+  if (voiceOn) speak("Voice on. I'll read my replies out loud.");
+  else stopSpeaking();
+});
+paintVoice();
+
+// Talk to Jarvis with your microphone (Chrome and Edge support this).
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const mic = $("mic");
+const MIC_ERRORS = {
+  "not-allowed": "Your browser blocked the microphone. Click the icon at the left of the address bar, set Microphone to Allow, then reload the page.",
+  "service-not-allowed": "Your browser blocked the microphone. Click the icon at the left of the address bar, set Microphone to Allow, then reload the page.",
+  "audio-capture": "I can't find a microphone. Check one is plugged in and chosen in Windows sound settings.",
+  "network": "Voice typing needs an internet connection, and only works in Google Chrome or Microsoft Edge (not Brave or Opera).",
+  "no-speech": "I didn't hear anything. Click the microphone and speak straight away."
+};
+if (!SR) {
+  mic.classList.add("off");
+  mic.title = "Voice input needs Chrome or Edge";
+  mic.addEventListener("click", () => add("jarvis",
+    "This browser can't do voice input. Open http://" + location.host + " in Google Chrome or Microsoft Edge to talk to me.", "error"));
+} else {
+  const rec = new SR();
+  rec.lang = "en-GB"; rec.interimResults = true; rec.continuous = false;
+  let listening = false, heard = "";
+  rec.onstart = () => { listening = true; heard = ""; mic.classList.add("live"); setState("Listening", "busy"); };
+  rec.onresult = e => {
+    heard = Array.from(e.results).map(r => r[0].transcript).join("");
+    input.value = heard;
+  };
+  rec.onerror = e => { if (e.error !== "aborted") add("jarvis", MIC_ERRORS[e.error] || ("Voice input stopped: " + e.error), "error"); };
+  rec.onend = () => {
+    listening = false; mic.classList.remove("live");
+    if (!busy) setState(idleText());
+    if (heard.trim()) send(heard);
+  };
+  mic.addEventListener("click", () => {
+    if (listening) { rec.stop(); return; }
+    stopSpeaking();
+    try { rec.start(); } catch (err) { add("jarvis", "The microphone is busy. Wait a second and try again.", "error"); }
+  });
+}
+
+$("voicePick").addEventListener("change", e => {
+  chosenVoice = e.target.value;
+  try { localStorage.setItem("jarvis-voice-choice", chosenVoice); } catch (err) {}
+  speak("Hello, this is how I sound now.", true);
+});
+
+const hour = new Date().getHours();
+$("greeting").textContent = hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening.";
+
+fetch("/api/status").then(r => r.json()).then(s => {
+  serverVoices = s.tts ? (s.voices || []) : [];
+  loadVoices();
+  const on = !/offline/i.test(s.brain);
+  $("dot").classList.toggle("on", on);
+  brainLabel = on ? s.brain.replace(/^Claude \((.*)\)$/, "Claude · $1") : "Offline mode";
+  setState(idleText());
+  if (!on) $("sub").textContent = "I'm in offline mode, so I only know a few tricks. Add your Claude key to wake me up properly.";
+}).catch(() => { setState("Offline"); add("jarvis", "I can't reach my core. Is the Jarvis window still open?", "error"); });
+input.focus();
+</script>
+</body>
+</html>
