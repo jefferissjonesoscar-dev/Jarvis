@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS · Voice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0b0d;
+    --surface: #16171a;
+    --line: #2a2b30;
+    --text: #ecebe8;
+    --muted: #8c8b88;
+    --faint: #5d5c5a;
+    --accent: #d4b98c;
+    --bad: #d77a72;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(ellipse at 50% 45%, #15151a 0%, var(--bg) 65%);
+    color: var(--text);
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+  }
+  header {
+    position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 24px; z-index: 2;
+  }
+  .name { font-weight: 600; letter-spacing: .14em; font-size: 14px; color: var(--muted); }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+    color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: none; transition: .15s;
+  }
+  .pill:hover { color: var(--text); border-color: #3a3b41; }
+  .pill svg { width: 15px; height: 15px; }
+
+  main { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; }
+  #orb { width: min(78vmin, 520px); height: min(78vmin, 520px); cursor: pointer; outline: none; touch-action: manipulation; }
+  .state { font-size: 17px; font-weight: 500; letter-spacing: .01em; min-height: 1.5em; margin-top: -2vmin; }
+  .said { color: var(--muted); font-size: 15px; min-height: 1.5em; max-width: 560px; text-align: center; padding: 0 8px; }
+  .said.error { color: var(--bad); }
+  .controls { position: fixed; left: 0; right: 0; bottom: 28px; display: flex; justify-content: center; }
+  .end {
+    width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
+    color: var(--muted); display: grid; place-items: center; cursor: pointer; transition: .2s; opacity: 0; pointer-events: none;
+  }
+  .end.show { opacity: 1; pointer-events: auto; }
+  .end:hover { color: #fff; background: var(--bad); border-color: var(--bad); }
+  .end svg { width: 20px; height: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="name">JARVIS</span>
+  <a class="pill" href="/" title="Back to the chat screen">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+    Chat
+  </a>
+</header>
+
+<main>
+  <canvas id="orb" tabindex="0" aria-label="Tap to talk to Jarvis" role="button"></canvas>
+  <div class="state" id="state">Tap the bubble to talk</div>
+  <div class="said" id="said" aria-live="polite"></div>
+</main>
+
+<div class="controls">
+  <button class="end" id="end" title="End conversation">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>
+</div>
+
+<script>
+// Voice mode: tap the bubble, talk, and Jarvis answers out loud. It keeps
+// listening after each answer until you press the X. The bubble moves with your
+// voice while you speak, and with Jarvis's voice while it answers.
+const $ = id => document.getElementById(id);
+const stateEl = $("state"), saidEl = $("said"), endBtn = $("end"), canvas = $("orb");
+
+let mode = "idle";              // idle | listening | thinking | speaking
+let active = false;             // conversation running
+let ctx = null, micAnalyser = null, outAnalyser = null, micStream = null;
+let audio = null, browserSpeaking = false;
+let serverVoices = [], voices = [], chosenVoice = "", ttsOk = false;
+try { chosenVoice = localStorage.getItem("jarvis-voice-choice") || ""; } catch (e) {}
+
+const LABELS = { idle: "Tap the bubble to talk", listening: "Listening", thinking: "Thinking", speaking: "Speaking" };
+function setMode(m) {
+  mode = m;
+  stateEl.textContent = LABELS[m];
+  endBtn.classList.toggle("show", active);
+}
+function say(text, isError) { saidEl.textContent = text || ""; saidEl.classList.toggle("error", !!isError); }
+
+// ---------- Audio levels ----------
+function ensureAudio() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    outAnalyser = ctx.createAnalyser();
+    outAnalyser.fftSize = 1024;
+    outAnalyser.connect(ctx.destination);
+  }
+  if (ctx.state === "suspended") ctx.resume();
+}
+async function openMic() {
+  if (micAnalyser) return;
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  micAnalyser = ctx.createAnalyser();
+  micAnalyser.fftSize = 1024;
+  ctx.createMediaStreamSource(micStream).connect(micAnalyser);
+}
+function closeMic() {
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  micStream = null; micAnalyser = null;
+}
+const buf = new Float32Array(1024);
+function rms(an) {
+  if (!an) return 0;
+  an.getFloatTimeDomainData(buf);
+  let s = 0;
+  for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+  return Math.sqrt(s / buf.length);
+}
+
+// ---------- The bubble ----------
+const g = canvas.getContext("2d");
+let level = 0, t = 0;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = r.width * dpr; canvas.height = r.height * dpr;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+
+function targetLevel() {
+  if (mode === "listening") {
+    if (!micAnalyser) return 0.15 + 0.1 * Math.sin(t * 3);
+    return Math.min(1, Math.max(0, (rms(micAnalyser) - 0.008) * 9));
+  }
+  if (mode === "speaking") {
+    if (browserSpeaking) return 0.35 + 0.3 * Math.abs(Math.sin(t * 7.3) * Math.sin(t * 3.1));
+    return Math.min(1, rms(outAnalyser) * 5.5);
+  }
+  if (mode === "thinking") return 0.12 + 0.08 * Math.sin(t * 4);
+  return 0;
+}
+
+function draw() {
+  t += 1 / 60;
+  const target = targetLevel();
+  level += (target - level) * (target > level ? 0.35 : 0.08);   // quick rise, gentle fall
+
+  const w = canvas.clientWidth, h = canvas.clientHeight, cx = w / 2, cy = h / 2;
+  g.clearRect(0, 0, w, h);
+  const idleBreath = mode === "idle" ? 0.02 * Math.sin(t * 1.6) : 0;
+  const base = Math.min(w, h) * 0.22;
+  const R = base * (1 + idleBreath + level * 0.28);
+
+  // soft halo
+  const haloA = 0.10 + level * 0.25 + (mode === "idle" ? 0 : 0.05);
+  const halo = g.createRadialGradient(cx, cy, R * 0.6, cx, cy, R * 1.6);
+  halo.addColorStop(0, `rgba(212,185,140,${haloA})`);
+  halo.addColorStop(1, "rgba(212,185,140,0)");
+  g.fillStyle = halo;
+  g.beginPath(); g.arc(cx, cy, R * 1.6, 0, Math.PI * 2); g.fill();
+
+  // ripple ring that grows with sound
+  if (mode !== "idle") {
+    g.strokeStyle = `rgba(212,185,140,${0.08 + level * 0.18})`;
+    g.lineWidth = 1;
+    g.beginPath(); g.arc(cx, cy, R * (1.25 + level * 0.25), 0, Math.PI * 2); g.stroke();
+  }
+
+  // the bubble: a circle whose edge wobbles with the sound
+  const wob = base * (0.015 + level * 0.075);
+  const spin = mode === "thinking" ? t * 1.4 : t * 0.6;
+  g.beginPath();
+  const N = 120;
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    const r = R + wob * (Math.sin(a * 3 + spin * 2) * 0.6 + Math.sin(a * 5 - spin * 1.7) * 0.3 + Math.sin(a * 2 + spin) * 0.4);
+    const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.closePath();
+  const fill = g.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.05, cx, cy, R * 1.05);
+  fill.addColorStop(0, "#fbf3e4");
+  fill.addColorStop(0.35, "#e6cfa6");
+  fill.addColorStop(0.75, "#b0946a");
+  fill.addColorStop(1, "#5e4c33");
+  g.fillStyle = fill;
+  g.shadowColor = "rgba(212,185,140,.45)";
+  g.shadowBlur = 30 + level * 50;
+  g.fill();
+  g.shadowBlur = 0;
+
+  // gentle sheen
+  const sheen = g.createRadialGradient(cx - R * 0.3, cy - R * 0.45, 0, cx - R * 0.3, cy - R * 0.45, R * 0.6);
+  sheen.addColorStop(0, "rgba(255,255,255,.35)");
+  sheen.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = sheen; g.fill();
+
+  requestAnimationFrame(draw);
+}
+
+// ---------- Listening ----------
+const SR = window.webkitSpeechRecognition || window.SpeechRecognition;
+let rec = null, heard = "";
+const MIC_ERRORS = {
+  "not-allowed": "Your browser blocked the microphone. Click the icon at the left of the address bar, set Microphone to Allow, then reload.",
+  "service-not-allowed": "Your browser blocked the microphone. Click the icon at the left of the address bar, set Microphone to Allow, then reload.",
+  "audio-capture": "I can't find a microphone. Check one is plugged in and chosen in Windows sound settings.",
+  "network": "Voice mode needs internet, and only works in Google Chrome or Microsoft Edge."
+};
+if (SR) {
+  rec = new SR();
+  rec.lang = "en-GB"; rec.interimResults = true; rec.continuous = false;
+  rec.onstart = () => { heard = ""; setMode("listening"); };
+  rec.onresult = e => { heard = Array.from(e.results).map(r => r[0].transcript).join(""); say(heard); };
+  rec.onerror = e => {
+    if (e.error === "no-speech" || e.error === "aborted") return;   // just listen again
+    if (e.error === "audio-capture" && micStream) {
+      closeMic();                       // the bubble's mic meter may be hogging the mic: drop it and retry
+      return;
+    }
+    stop();
+    say(MIC_ERRORS[e.error] || ("Voice stopped (" + e.error + "). Try Google Chrome or Microsoft Edge."), true);
+  };
+  rec.onend = () => {
+    if (!active || mode !== "listening") return;
+    if (heard.trim()) think(heard.trim());
+    else listen();                       // heard nothing: keep listening
+  };
+}
+function listen() {
+  if (!active) return;
+  try { rec.start(); } catch (e) { setTimeout(listen, 300); }
+}
+
+// ---------- Thinking and answering ----------
+async function think(text) {
+  setMode("thinking");
+  let reply;
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+    reply = data.text || data.error || "Sorry, I didn't catch that.";
+  } catch (e) {
+    reply = "I can't reach my core. Is the Jarvis window still open?";
+  }
+  if (!active) return;
+  await speak(reply);
+}
+
+function speakWithBrowser(text) {
+  return new Promise(resolve => {
+    if (!("speechSynthesis" in window)) return resolve();
+    const name = chosenVoice.startsWith("web:") ? chosenVoice.slice(4) : "";
+    const u = new SpeechSynthesisUtterance(text);
+    const v = voices.find(x => x.name === name) || voices[0];
+    if (v) { u.voice = v; u.lang = v.lang; }
+    u.onstart = () => { browserSpeaking = true; setMode("speaking"); };
+    u.onend = u.onerror = () => { browserSpeaking = false; resolve(); };
+    speechSynthesis.speak(u);
+  });
+}
+
+async function speak(text) {
+  say("");
+  const voice = chosenVoice.startsWith("srv:") ? chosenVoice.slice(4)
+    : (!chosenVoice && ttsOk ? "" : null);
+  if (voice !== null) {
+    try {
+      const res = await fetch("/api/speak", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(voice ? { text, voice } : { text })
+      });
+      if (!res.ok) throw new Error(res.status);
+      const url = URL.createObjectURL(await res.blob());
+      if (!active) return URL.revokeObjectURL(url);
+      audio = new Audio(url);
+      ctx.createMediaElementSource(audio).connect(outAnalyser);
+      await new Promise(resolve => {
+        audio.onplay = () => setMode("speaking");
+        audio.onended = audio.onerror = resolve;
+        audio.play().catch(resolve);
+      });
+      URL.revokeObjectURL(url);
+      audio = null;
+      if (active) listen();
+      return;
+    } catch (e) { /* fall back to the browser's voice */ }
+  }
+  await speakWithBrowser(text);
+  if (active) listen();
+}
+
+function stopSpeaking() {
+  if (audio) { audio.onended = null; audio.pause(); audio = null; }
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  browserSpeaking = false;
+}
+
+// ---------- Start / stop ----------
+async function start() {
+  if (!SR) { say("Voice mode needs Google Chrome or Microsoft Edge. Open http://" + location.host + "/voice in one of those.", true); return; }
+  ensureAudio();
+  // The mic meter only makes the bubble move; if it fails, voice mode still works.
+  try { await openMic(); } catch (e) { closeMic(); }
+  active = true;
+  say("");
+  listen();
+}
+function stop() {
+  active = false;
+  stopSpeaking();
+  if (rec) try { rec.abort(); } catch (e) {}
+  closeMic();
+  setMode("idle");
+}
+
+function tap() {
+  if (!active) return start();
+  if (mode === "speaking") { stopSpeaking(); listen(); }   // interrupt Jarvis and talk
+}
+canvas.addEventListener("click", tap);
+canvas.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); tap(); } });
+endBtn.addEventListener("click", stop);
+
+// Voices: uses the voice you picked on the chat screen (Ryan by default).
+function loadBrowserVoices() {
+  if ("speechSynthesis" in window)
+    voices = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang))
+      .sort((a, b) => (/natural/i.test(b.name) - /natural/i.test(a.name)) || (/en-GB/i.test(b.lang) - /en-GB/i.test(a.lang)));
+}
+if ("speechSynthesis" in window) { speechSynthesis.onvoiceschanged = loadBrowserVoices; loadBrowserVoices(); }
+fetch("/api/status").then(r => r.json()).then(s => {
+  ttsOk = !!s.tts;
+  if (!ttsOk && chosenVoice.startsWith("srv:")) chosenVoice = "";
+  if (/offline/i.test(s.brain)) say("Offline mode: add your Claude key to wake me up properly.");
+}).catch(() => say("I can't reach my core. Is the Jarvis window still open?", true));
+
+resize();
+setMode("idle");
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
