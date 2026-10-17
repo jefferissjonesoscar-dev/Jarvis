@@ -342,7 +342,7 @@ vt.addEventListener("click", () => {
 paintVoice();
 
 // Talk to Jarvis with your microphone (Chrome and Edge support this).
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const SR = window.webkitSpeechRecognition || window.SpeechRecognition;
 const mic = $("mic");
 const MIC_ERRORS = {
   "not-allowed": "Your browser blocked the microphone. Click the icon at the left of the address bar, set Microphone to Allow, then reload the page.",

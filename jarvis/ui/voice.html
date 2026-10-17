@@ -140,7 +140,10 @@ function resize() {
 window.addEventListener("resize", resize);
 
 function targetLevel() {
-  if (mode === "listening") return Math.min(1, Math.max(0, (rms(micAnalyser) - 0.008) * 9));
+  if (mode === "listening") {
+    if (!micAnalyser) return 0.15 + 0.1 * Math.sin(t * 3);
+    return Math.min(1, Math.max(0, (rms(micAnalyser) - 0.008) * 9));
+  }
   if (mode === "speaking") {
     if (browserSpeaking) return 0.35 + 0.3 * Math.abs(Math.sin(t * 7.3) * Math.sin(t * 3.1));
     return Math.min(1, rms(outAnalyser) * 5.5);
@@ -208,7 +211,7 @@ function draw() {
 }
 
 // ---------- Listening ----------
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const SR = window.webkitSpeechRecognition || window.SpeechRecognition;
 let rec = null, heard = "";
 const MIC_ERRORS = {
   "not-allowed": "Your browser blocked the microphone. Click the icon at the left of the address bar, set Microphone to Allow, then reload.",
@@ -222,7 +225,13 @@ if (SR) {
   rec.onstart = () => { heard = ""; setMode("listening"); };
   rec.onresult = e => { heard = Array.from(e.results).map(r => r[0].transcript).join(""); say(heard); };
   rec.onerror = e => {
-    if (MIC_ERRORS[e.error]) { stop(); say(MIC_ERRORS[e.error], true); }
+    if (e.error === "no-speech" || e.error === "aborted") return;   // just listen again
+    if (e.error === "audio-capture" && micStream) {
+      closeMic();                       // the bubble's mic meter may be hogging the mic: drop it and retry
+      return;
+    }
+    stop();
+    say(MIC_ERRORS[e.error] || ("Voice stopped (" + e.error + "). Try Google Chrome or Microsoft Edge."), true);
   };
   rec.onend = () => {
     if (!active || mode !== "listening") return;
@@ -306,8 +315,8 @@ function stopSpeaking() {
 async function start() {
   if (!SR) { say("Voice mode needs Google Chrome or Microsoft Edge. Open http://" + location.host + "/voice in one of those.", true); return; }
   ensureAudio();
-  try { await openMic(); }
-  catch (e) { say(MIC_ERRORS["not-allowed"], true); return; }
+  // The mic meter only makes the bubble move; if it fails, voice mode still works.
+  try { await openMic(); } catch (e) { closeMic(); }
   active = true;
   say("");
   listen();
