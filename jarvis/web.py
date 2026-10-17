@@ -1,7 +1,9 @@
 """The Jarvis chat screen: a small web server on your own computer.
 
 It only listens on 127.0.0.1, so nothing outside this computer can reach it.
-The page lives in ui/index.html; it talks to two endpoints:
+There are two pages: the chat screen (ui/index.html, at /) and voice mode
+(ui/voice.html, at /voice), where you just talk and Jarvis answers out loud.
+Both talk to these endpoints:
 
     GET  /api/status   brain name and voices, so the page can show them
     POST /api/chat     {"text": ...} -> {"type": "reply" | "ask", "text": ...}
@@ -24,7 +26,8 @@ from typing import Callable
 from . import voice as tts
 
 log = logging.getLogger("jarvis.web")
-UI_FILE = Path(__file__).resolve().parent / "ui" / "index.html"
+UI_DIR = Path(__file__).resolve().parent / "ui"
+PAGES = {"/": "index.html", "/index.html": "index.html", "/voice": "voice.html", "/voice.html": "voice.html"}
 
 
 class WebHuman:
@@ -92,8 +95,9 @@ def make_handler(session: ChatSession, brain: str):
             self._send(code, json.dumps(data).encode("utf-8"), "application/json")
 
         def do_GET(self):
-            if self.path in ("/", "/index.html"):
-                self._send(200, UI_FILE.read_bytes(), "text/html; charset=utf-8")
+            page = PAGES.get(self.path.split("?")[0])
+            if page:
+                self._send(200, (UI_DIR / page).read_bytes(), "text/html; charset=utf-8")
             elif self.path == "/api/status":
                 self._json({"brain": brain, "tts": tts.available(),
                             "voices": [{"id": v, "label": l} for v, l in tts.VOICES],
@@ -137,6 +141,7 @@ def serve(cfg, make_agent: Callable[[WebHuman], object], brain: str, open_browse
         return 1
     url = f"http://127.0.0.1:{cfg.port}"
     print(f"Jarvis is online at {url}  (brain: {brain})")
+    print(f"For voice mode (just talk, Jarvis answers out loud) go to {url}/voice")
     print("Your browser should open by itself. Press Ctrl+C here to stop Jarvis.")
     if open_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
