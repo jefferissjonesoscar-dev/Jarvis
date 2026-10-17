@@ -59,7 +59,5 @@ def run_check(cfg: Config) -> int:
             print("    is invalid, make a new one at console.anthropic.com > API Keys.")
     else:
         print(f"{todo}Brain: offline mode. Add ANTHROPIC_API_KEY to use Claude.")
-    print("\nThis was only a check; Jarvis is not running yet.")
-    print("To start it, pick Run Jarvis in VS Code's Run list and press F5.")
-    print("Your browser then opens the chat screen by itself. Keep VS Code open while you use it.")
+    print(f"\nStart Jarvis with Run Jarvis; the chat screen opens at http://127.0.0.1:{cfg.port}")
     return 0

@@ -59,11 +59,6 @@ def remove_example_files(root: Path = ROOT) -> None:
             if example.parent == root and not (root / ".env").exists():
                 example.rename(root / ".env")
             elif example.exists():
-                key = read_env_file(example).get("ANTHROPIC_API_KEY")
-                env = root / ".env"
-                if example.parent == root and key and not read_env_file(env).get("ANTHROPIC_API_KEY"):
-                    with env.open("a", encoding="utf-8") as f:
-                        f.write(f"\nANTHROPIC_API_KEY={key}\n")
                 example.unlink()
         except OSError:
             pass

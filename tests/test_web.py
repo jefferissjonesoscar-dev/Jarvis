@@ -39,14 +39,6 @@ class WebTests(unittest.TestCase):
         with urllib.request.urlopen(self.base + "/api/status", timeout=10) as r:
             self.assertEqual(json.loads(r.read())["brain"], "offline")
 
-    def test_voice_page(self):
-        with urllib.request.urlopen(self.base + "/voice", timeout=10) as r:
-            page = r.read()
-        self.assertIn(b"orb", page)
-        self.assertIn(b'href="/"', page)
-        with urllib.request.urlopen(self.base + "/", timeout=10) as r:
-            self.assertIn(b'href="/voice"', r.read())
-
     def test_reply(self):
         reply = self.chat("calculate 6 * 7")
         self.assertEqual(reply["type"], "reply")

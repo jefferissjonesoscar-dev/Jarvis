@@ -29,19 +29,9 @@ Jarvis, press the red square in VS Code (or Ctrl+C in its terminal).
 
 On the chat screen:
 
-- Type and press Enter, or click one of the suggestions.
+- Type and press Enter, or click a quick button on the left.
 - Click the microphone to talk (works in Chrome and Edge).
-- Click **Read aloud** at the top right and Jarvis reads its replies out loud.
-  Pick a voice in the menu next to it. The "Jarvis voices" sound natural in any
-  browser and need internet; Ryan (British man) is the default.
-
-Voice mode (http://127.0.0.1:8765/voice) is a second page with just a big
-bubble and no text. Click **Voice mode** at the top right of the chat screen to
-open it. Click the bubble once, allow the microphone, and talk: the bubble moves
-with your voice, and Jarvis answers out loud, then listens again. Click the
-bubble while Jarvis is talking to interrupt, press the X at the bottom to stop,
-and click **Chat** at the top right to go back. It uses the voice you picked on
-the chat screen.
+- Click **VOICE OFF** to switch it on, and Jarvis reads its replies out loud.
 
 ## Step 3. Add your Claude key
 
@@ -79,7 +69,6 @@ jarvis/
   __main__.py   starts Jarvis (chat screen, terminal, setup, check)
   web.py        the chat screen's server (only reachable from this computer)
   ui/index.html the chat screen itself
-  ui/voice.html voice mode (talk only, answers out loud)
   agent.py      the loop: think, use tools, repeat; confirmations; action log
   brains.py     Claude brain, plus the offline stand-in
   tools.py      the allowlist: everything Jarvis can do, one function each
